@@ -110,8 +110,8 @@ async function getEngine(): Promise<LuaEngine> {
     return enginePromise
 }
 
-function getSafePreset(value: string): "Weak" | "Medium" | "Strong" {
-    return value === "Weak" || value === "Strong" ? value : "Medium"
+function getSafePreset(): "Strong" {
+    return "Strong"
 }
 
 function errorMessage(error: unknown): string {
@@ -186,14 +186,13 @@ end
 
 export async function obfuscateLua(
     code: string,
-    preset: "Weak" | "Medium" | "Strong" = "Medium",
 ): Promise<string> {
     if (!code || !code.trim()) {
         throw new Error("Nenhum código Luau foi fornecido.")
     }
 
     const engine = await getEngine()
-    const presetName = getSafePreset(preset)
+    const presetName = getSafePreset()
     const source = code
 
     const script = `
