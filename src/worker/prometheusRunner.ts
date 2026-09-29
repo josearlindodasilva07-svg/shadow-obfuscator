@@ -89,25 +89,37 @@ end
 
 config.LuaVersion = "LuaU"
 
-local pipeline = Prometheus.Pipeline:fromConfig(
-    config
-)
+local pipeline = Prometheus.Pipeline:fromConfig(config)
 
-local result = pipeline:apply(
+local output = pipeline:apply(
     source,
     "input.lua"
 )
 
-return result
+return output
 `
 
     const result = engine.doString(script)
 
-    if (typeof result !== "string") {
-        throw new Error(
-            `O Prometheus retornou um valor inválido: ${typeof result}`,
-        )
+    if (typeof result === "string") {
+        return result
     }
 
-    return result
+    if (result && typeof result === "object") {
+        const values = Object.values(
+            result as Record<string, unknown>,
+        )
+
+        const firstString = values.find(
+            (value) => typeof value === "string",
+        )
+
+        if (typeof firstString === "string") {
+            return firstString
+        }
+    }
+
+    throw new Error(
+        `O Prometheus retornou um valor inválido: ${typeof result}`,
+    )
 }
