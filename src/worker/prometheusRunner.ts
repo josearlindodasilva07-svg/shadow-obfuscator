@@ -22,16 +22,15 @@ function patchPrometheusSource(name: string, source: string): string {
         )
     }
 
-    if (name !== "prometheus.parser") return source
-
-    const oldBlock = `
+    if (name === "prometheus.parser") {
+        const oldBlock = `
 \t\t\tif(consume(self, TokenKind.Symbol, "%")) then
 \t\t\t\tlocal rhs = self:expressionUnary(scope);
 \t\t\t\tcurr = Ast.ModExpression(curr, rhs, true);
 \t\t\t\tfound = true;
 \t\t\tend
 `
-    const newBlock = `
+        const newBlock = `
 \t\t\tif(consume(self, TokenKind.Symbol, "%")) then
 \t\t\t\tlocal rhs = self:expressionUnary(scope);
 \t\t\t\tcurr = Ast.ModExpression(curr, rhs, true);
@@ -48,7 +47,24 @@ function patchPrometheusSource(name: string, source: string): string {
 \t\t\t\tfound = true;
 \t\t\tend
 `
-    return source.includes(oldBlock) ? source.replace(oldBlock, newBlock) : source
+        source = source.includes(oldBlock) ? source.replace(oldBlock, newBlock) : source
+    }
+
+    // Correção central: estas etapas criam trechos Lua internamente e o
+    // Prometheus original os analisa com Lua51. Em uma pipeline Luau isso
+    // mistura ASTs de versões diferentes e pode gerar output inválido.
+    const luauInternalModules = new Set([
+        "prometheus.steps.ConstantArray",
+        "prometheus.steps.EncryptStrings",
+        "prometheus.steps.AntiTamper",
+    ])
+    if (luauInternalModules.has(name)) {
+        source = source
+            .replaceAll("LuaVersion = LuaVersion.Lua51", "LuaVersion = LuaVersion.LuaU")
+            .replaceAll("LuaVersion = Enums.LuaVersion.Lua51", "LuaVersion = Enums.LuaVersion.LuaU")
+    }
+
+    return source
 }
 
 function createBootstrap(): string {
@@ -83,48 +99,12 @@ async function getEngine(): Promise<LuaEngine> {
     return enginePromise
 }
 
-function getErrorMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error)
-}
-
-function safePresetSteps(preset: "Weak" | "Medium" | "Strong"): string {
-    // Roblox-safe: não usa Vmify, AntiTamper, NumbersToExpressions ou
-    // WrapInFunction, pois essas etapas podem alterar o ambiente de execução.
-    if (preset === "Weak") {
-        return `{
-            { Name = "ConstantArray", Settings = {
-                Threshold = 1,
-                StringsOnly = true,
-                Shuffle = true,
-                Rotate = true,
-                LocalWrapperThreshold = 0,
-                Encoding = "mixed"
-            }}
-        }`
-    }
-
-    return `{
-        { Name = "EncryptStrings", Settings = {} },
-        { Name = "SplitStrings", Settings = {
-            Threshold = 0.85,
-            MinLength = 3,
-            MaxLength = 8,
-            ConcatenationType = "custom",
-            CustomFunctionType = "inline"
-        } },
-        { Name = "ConstantArray", Settings = {
-            Threshold = 1,
-            StringsOnly = true,
-            Shuffle = true,
-            Rotate = ${preset === "Strong" ? "true" : "false"},
-            LocalWrapperThreshold = 0,
-            Encoding = "mixed"
-        }}
-    }`
-}
-
 function getSafePreset(value: string): "Weak" | "Medium" | "Strong" {
     return value === "Weak" || value === "Strong" ? value : "Medium"
+}
+
+function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error)
 }
 
 export async function obfuscateLua(
@@ -136,36 +116,41 @@ export async function obfuscateLua(
     }
 
     const engine = await getEngine()
-    const selectedPreset = getSafePreset(preset)
+    const presetName = getSafePreset(preset)
     const source = code
-    const steps = safePresetSteps(selectedPreset)
 
     const script = `
 local Prometheus = require("prometheus")
 local source = ${luaLongString(source)}
-local originalConfig = Prometheus.Presets.Minify
+local originalConfig = Prometheus.Presets[${JSON.stringify(presetName)}]
 
 if not originalConfig then
-    error("Preset Minify não encontrado no Prometheus.")
+    error("Preset inválido: " .. tostring(${JSON.stringify(presetName)}))
 end
 
-local config = {}
-for key, value in pairs(originalConfig) do
-    config[key] = value
+-- Copiar também Settings e Steps para nenhuma execução contaminar a próxima.
+local function clone(value, seen)
+    if type(value) ~= "table" then return value end
+    seen = seen or {}
+    if seen[value] then return seen[value] end
+    local result = {}
+    seen[value] = result
+    for key, item in pairs(value) do
+        result[clone(key, seen)] = clone(item, seen)
+    end
+    return result
 end
 
+local config = clone(originalConfig)
 config.LuaVersion = "LuaU"
 config.PrettyPrint = false
-config.VarNamePrefix = ""
-config.NameGenerator = "MangledShuffled"
-config.Seed = 0
-config.Steps = ${steps}
+config.Steps = config.Steps or {}
 
 local pipeline = Prometheus.Pipeline:fromConfig(config)
 local output = pipeline:apply(source, "input.lua")
 
-if type(output) ~= "string" or output == "" then
-    error("O Prometheus não retornou código Luau válido.")
+if type(output) ~= "string" or not output:match("%S") then
+    error("O Prometheus retornou código vazio ou inválido.")
 end
 
 return output
@@ -174,10 +159,10 @@ return output
     try {
         const result = await engine.doString(script)
         if (typeof result !== "string" || !result.trim()) {
-            throw new Error("O Prometheus retornou um resultado vazio.")
+            throw new Error("O Prometheus retornou código vazio ou inválido.")
         }
         return result
     } catch (error) {
-        throw new Error(`Prometheus Roblox-safe: ${getErrorMessage(error)}`)
+        throw new Error(`Prometheus Luau compatibility: ${errorMessage(error)}`)
     }
 }
