@@ -94,6 +94,11 @@
             outline: none;
         }
 
+        .buttons {
+            display: flex;
+            gap: 10px;
+        }
+
         button {
             width: 100%;
             border: 1px solid #333333;
@@ -119,6 +124,16 @@
             opacity: 0.5;
             cursor: wait;
             transform: none;
+        }
+
+        #clearButton {
+            background: #181818;
+            color: #ffffff;
+            border-color: #303030;
+        }
+
+        #clearButton:hover {
+            background: #222222;
         }
 
         #copyButton {
@@ -158,6 +173,10 @@
                 min-height: 230px;
                 font-size: 13px;
             }
+
+            .buttons {
+                flex-direction: column;
+            }
         }
     </style>
 </head>
@@ -192,9 +211,17 @@
 
             </div>
 
-            <button id="obfuscateButton">
-                OBFUSCAR
-            </button>
+            <div class="buttons">
+
+                <button id="obfuscateButton">
+                    OBFUSCAR
+                </button>
+
+                <button id="clearButton">
+                    LIMPAR
+                </button>
+
+            </div>
 
             <div id="status"></div>
 
@@ -226,6 +253,7 @@
         const outputCode = document.getElementById("outputCode")
         const preset = document.getElementById("preset")
         const obfuscateButton = document.getElementById("obfuscateButton")
+        const clearButton = document.getElementById("clearButton")
         const copyButton = document.getElementById("copyButton")
         const status = document.getElementById("status")
 
@@ -261,6 +289,13 @@
             } finally {
                 obfuscateButton.disabled = false
             }
+        })
+
+        clearButton.addEventListener("click", () => {
+            inputCode.value = ""
+            outputCode.value = ""
+            status.textContent = ""
+            inputCode.focus()
         })
 
         copyButton.addEventListener("click", async () => {
