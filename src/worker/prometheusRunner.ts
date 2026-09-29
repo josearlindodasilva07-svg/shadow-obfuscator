@@ -47,7 +47,7 @@ async function createEngine(): Promise<LuaEngine> {
 
     const engine = await factory.createEngine()
 
-    await engine.doStringAsync(
+    engine.doString(
         createBootstrap(),
     )
 
@@ -97,7 +97,7 @@ local result = Prometheus:obfuscate(
 return result
 `
 
-    const result = await engine.doStringAsync(script)
+    const result = engine.doString(script)
 
     if (typeof result !== "string") {
         throw new Error(
