@@ -137,7 +137,11 @@ if not math.log10 then
     math.log10 = function(value) return math.log(value) / math.log(10) end
 end
 `
-    return prelude + output
+    // WrapInFunction do Prometheus gera `return(function(...) ... end)(...)`.
+    // Em Script/LocalScript Roblox o wrapper deve ser chamado, não retornado
+    // como resultado do chunk. O corpo da função e todas as etapas continuam.
+    const executableChunk = output.replace(/^\s*return\s*\(\s*function\s*\(/, "(function(")
+    return prelude + executableChunk
 }
 
 export async function obfuscateLua(
