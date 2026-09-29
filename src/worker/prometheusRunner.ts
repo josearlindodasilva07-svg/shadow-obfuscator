@@ -47,7 +47,7 @@ async function createEngine(): Promise<LuaEngine> {
 
     const engine = await factory.createEngine()
 
-    engine.doString(
+    await engine.doString(
         createBootstrap(),
     )
 
@@ -99,27 +99,13 @@ local output = pipeline:apply(
 return output
 `
 
-    const result = engine.doString(script)
+    const result = await engine.doString(script)
 
-    if (typeof result === "string") {
-        return result
+    if (typeof result !== "string") {
+        throw new Error(
+            `O Prometheus retornou um valor inválido: ${typeof result}`,
+        )
     }
 
-    if (result && typeof result === "object") {
-        const values = Object.values(
-            result as Record<string, unknown>,
-        )
-
-        const firstString = values.find(
-            (value) => typeof value === "string",
-        )
-
-        if (typeof firstString === "string") {
-            return firstString
-        }
-    }
-
-    throw new Error(
-        `O Prometheus retornou um valor inválido: ${typeof result}`,
-    )
+    return result
 }
