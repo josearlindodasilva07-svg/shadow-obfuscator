@@ -69,8 +69,6 @@ export async function obfuscateLua(
         )
     }
 
-    // Cria um novo ambiente do Prometheus para cada obfuscação.
-    // Isso limpa todo o estado da execução anterior.
     const engine = await getEngine()
 
     try {
@@ -87,8 +85,6 @@ if not config then
     config = Prometheus.Presets.Medium
 end
 
--- Cria uma cópia da configuração para impedir
--- alterações no preset original durante a execução.
 local cleanConfig = {}
 
 for key, value in pairs(config) do
@@ -113,13 +109,12 @@ return output
 
         if (typeof result !== "string") {
             throw new Error(
-                \`O Prometheus retornou um valor inválido: \${typeof result}\`,
+                `O Prometheus retornou um valor inválido: ${typeof result}`,
             )
         }
 
         return result
     } finally {
-        // Limpa o estado do Wasmoon/Prometheus após cada execução.
         engine.global.close()
     }
 }
