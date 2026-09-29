@@ -1,1 +1,233 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+    <title>Shadow Obfuscator</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: #0a0a0a;
+            color: #ffffff;
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        .container {
+            width: min(900px, 94%);
+            margin: 40px auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: 2px;
+        }
+
+        .section {
+            background: #111111;
+            border: 1px solid #242424;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 280px;
+            resize: vertical;
+
+            background: #080808;
+            color: #eeeeee;
+
+            border: 1px solid #292929;
+            border-radius: 8px;
+
+            padding: 14px;
+
+            outline: none;
+
+            font-family: Consolas, Monaco, monospace;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        textarea:focus {
+            border-color: #555555;
+        }
+
+        textarea::placeholder {
+            color: #666666;
+        }
+
+        .settings {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 18px 0;
+        }
+
+        .settings label {
+            margin: 0;
+        }
+
+        select {
+            background: #080808;
+            color: #ffffff;
+
+            border: 1px solid #292929;
+            border-radius: 7px;
+
+            padding: 9px 12px;
+
+            outline: none;
+        }
+
+        button {
+            width: 100%;
+
+            border: 1px solid #333333;
+            border-radius: 8px;
+
+            background: #ffffff;
+            color: #000000;
+
+            padding: 13px;
+
+            font-size: 14px;
+            font-weight: 700;
+
+            cursor: pointer;
+
+            transition: 0.15s ease;
+        }
+
+        button:hover {
+            background: #dddddd;
+        }
+
+        button:active {
+            transform: scale(0.99);
+        }
+
+        #copyButton {
+            margin-top: 15px;
+            background: #181818;
+            color: #ffffff;
+            border-color: #303030;
+        }
+
+        #copyButton:hover {
+            background: #222222;
+        }
+
+        #status {
+            min-height: 20px;
+            margin-top: 12px;
+
+            text-align: center;
+
+            color: #888888;
+            font-size: 13px;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                width: 94%;
+                margin: 25px auto;
+            }
+
+            .header h1 {
+                font-size: 23px;
+            }
+
+            .section {
+                padding: 15px;
+            }
+
+            textarea {
+                min-height: 230px;
+                font-size: 13px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <main class="container">
+
+        <header class="header">
+            <h1>SHADOW OBFUSCATOR</h1>
+        </header>
+
+        <section class="section">
+
+            <label for="inputCode">Código Luau</label>
+
+            <textarea
+                id="inputCode"
+                placeholder="Cole seu código Luau aqui..."
+                spellcheck="false"
+            ></textarea>
+
+            <div class="settings">
+
+                <label for="preset">Preset:</label>
+
+                <select id="preset">
+                    <option value="weak">Weak</option>
+                    <option value="medium" selected>Medium</option>
+                    <option value="strong">Strong</option>
+                </select>
+
+            </div>
+
+            <button id="obfuscateButton">
+                OBFUSCAR
+            </button>
+
+            <div id="status"></div>
+
+        </section>
+
+        <section class="section">
+
+            <label for="outputCode">Código obfuscado</label>
+
+            <textarea
+                id="outputCode"
+                placeholder="O código obfuscado aparecerá aqui..."
+                spellcheck="false"
+                readonly
+            ></textarea>
+
+            <button id="copyButton">
+                COPIAR
+            </button>
+
+        </section>
+
+    </main>
+
+</body>
+</html>
