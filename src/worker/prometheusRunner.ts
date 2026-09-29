@@ -55,6 +55,7 @@ function patchPrometheusSource(
 			local rhs = self:expressionUnary(scope);
 
 			local mathScope, mathId = scope:resolve("math");
+
 			local mathExpression = Ast.VariableExpression(
 				mathScope,
 				mathId
@@ -116,7 +117,6 @@ end
     return `
 arg = {}
 
--- Compatibilidade com math.log10.
 if not math.log10 then
     math.log10 = function(value)
         return math.log(value) / math.log(10)
@@ -224,12 +224,10 @@ local safeSteps = {}
 for _, step in ipairs(originalSteps) do
     local name = step.Name
 
-    -- Removemos transformações que podem
-    -- quebrar compatibilidade com Luau/Roblox.
-
     if name ~= "Vmify"
         and name ~= "AntiTamper"
         and name ~= "NumbersToExpressions"
+        and name ~= "EncryptStrings"
     then
         table.insert(
             safeSteps,
