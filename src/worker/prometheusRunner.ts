@@ -36,6 +36,9 @@ end
         .join("\n")
 
     return `
+-- Ambiente compatível com o CLI do Prometheus
+arg = {}
+
 ${modules}
 
 return true
@@ -46,8 +49,6 @@ async function createEngine(): Promise<LuaEngine> {
     const factory = new LuaFactory(glueWasmUrl)
 
     const engine = await factory.createEngine()
-
-    engine.global.set("arg", {})
 
     await engine.doString(
         createBootstrap(),
@@ -89,7 +90,7 @@ if not config then
     config = Prometheus.Presets.Medium
 end
 
-config.LuaVersion = "Lua51"
+config.LuaVersion = "LuaU"
 
 local pipeline = Prometheus.Pipeline:fromConfig(
     config
