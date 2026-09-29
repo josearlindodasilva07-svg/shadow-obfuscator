@@ -37,7 +37,7 @@
 <main class="container">
     <header class="header">
         <h1>SHADOW OBFUSCATOR V1.0.0</h1>
-        <p>Obfuscação Luau Roblox</p>
+        <p>Obfuscação Luau Roblox · Modo VM</p>
     </header>
 
     <section class="section">
@@ -48,7 +48,7 @@
             <span id="fileName">Nenhum arquivo selecionado</span>
         </div>
         <textarea id="inputCode" placeholder="Cole seu código Luau ou carregue um arquivo..." spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
-        <div class="mode"><strong>Obfuscação Luau Roblox</strong></div>
+        <div class="mode"><strong>SHADOW VM · ROBLOX</strong> — strings, fluxo e constantes protegidos</div>
         <div class="buttons">
             <button id="obfuscateButton" type="button">OBFUSCAR</button>
             <button id="clearButton" class="secondary" type="button">LIMPAR</button>
@@ -97,7 +97,7 @@
             return
         }
         obfuscateButton.disabled = true
-        status.textContent = "Obfuscando para Roblox..."
+        status.textContent = "Gerando VM Roblox..."
         outputCode.value = ""
         try {
             outputCode.value = await obfuscateLua(code)
