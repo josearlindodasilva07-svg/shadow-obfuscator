@@ -133,6 +133,19 @@ function decodeLuaLiteral(value: string): string {
 function encryptLuaStrings(source: string): string {
     const key = 173
     const encoded: string[] = []
+    const memberNames = new Set([
+        "GetService", "LocalPlayer", "Character", "CharacterAdded", "WaitForChild",
+        "Connect", "Name", "ResetOnSpawn", "Parent", "Size", "Position",
+        "BackgroundColor3", "Text", "TextColor3", "TextSize", "Font", "Active",
+        "CornerRadius", "InputBegan", "Changed", "InputState", "UserInputType",
+        "MouseButton1", "Touch", "End", "InputChanged", "MouseMovement",
+        "MouseButton1Click", "JumpRequest", "Health", "ChangeState", "X", "Y",
+        "Scale", "Offset",
+    ])
+    const addEncoded = (value: string): number => {
+        const bytes = Array.from(new TextEncoder().encode(value), byte => (byte ^ key) + 1)
+        return encoded.push(`{${bytes.join(",")}}`)
+    }
     let result = ""
     let cursor = 0
     let index = 0
@@ -165,18 +178,39 @@ function encryptLuaStrings(source: string): string {
         }
 
         const literal = decodeLuaLiteral(source.slice(index + 1, end))
-        const bytes = Array.from(new TextEncoder().encode(literal), byte => (byte ^ key) + 1)
-        const id = encoded.push(`{${bytes.join(",")}}`) - 1
-        result += source.slice(cursor, index) + `__shadow_decode(${id + 1})`
+        const id = addEncoded(literal)
+        result += source.slice(cursor, index) + `__shadow_decode(${id})`
         cursor = end + 1
         index = end + 1
+        continue
+    }
+
+    result += source.slice(cursor)
+
+    // Transformar somente acessos fora de strings/comentários. O scanner acima
+    // já removeu cada literal, então os membros Roblox restantes são seguros.
+    let memberIndex = 0
+    let memberResult = ""
+    let memberCursor = 0
+    while (memberIndex < result.length) {
+        if (result[memberIndex] === "." && result[memberIndex - 1] !== ".") {
+            const member = result.slice(memberIndex + 1).match(/^[A-Za-z_][A-Za-z0-9_]*/)?.[0]
+            if (member && memberNames.has(member)) {
+                const id = addEncoded(member)
+                memberResult += result.slice(memberCursor, memberIndex) + `[__shadow_decode(${id})]`
+                memberCursor = memberIndex + 1 + member.length
+                memberIndex = memberCursor
+                continue
+            }
+        }
+        memberIndex += 1
     }
 
     if (!encoded.length) return source
-    result += source.slice(cursor)
+    memberResult += result.slice(memberCursor)
     const table = `{${encoded.join(",")}}`
     const decoder = `local __shadow_data=${table};local __shadow_decode=function(i)local t=__shadow_data[i]local o={}for n=1,#t do o[n]=string.char((t[n]-1)~${key})end return table.concat(o)end;`
-    return decoder + result
+    return decoder + memberResult
 }
 
 function addRobloxCompatibilityPrelude(output: string): string {
@@ -281,26 +315,9 @@ end
 local config = clone(originalConfig)
 config.LuaVersion = "LuaU"
 config.PrettyPrint = false
-    config.Steps = config.Steps or {}
-    -- O Strong original do Prometheus pode transformar strings usadas como
-    -- nomes de propriedades Roblox. Isso gera erros como "oa@1a is not a
-    -- valid member of ScreenGui". Mantemos renomeação/constantes seguras,
-    -- mas removemos apenas etapas conhecidas por quebrar a execução Luau.
-    local blocked = {
-        Vmify = true,
-        EncryptStrings = true,
-        ConstantArray = true,
-        AntiTamper = true,
-        WrapInFunction = true,
-    }
-    local safeSteps = {}
-    for _, step in ipairs(config.Steps) do
-        local name = step.Name or step.name or step[1]
-        if not blocked[name] then
-            table.insert(safeSteps, step)
-        end
-    end
-    config.Steps = safeSteps
+config.Steps = config.Steps or {}
+-- Usar o Strong completo para produzir o formato VM do preset: tabela de
+-- strings, decoder, nomes renomeados e fluxo de controle embaralhado.
 
 local pipeline = Prometheus.Pipeline:fromConfig(config)
 local output = pipeline:apply(source, "input.lua")
@@ -317,7 +334,7 @@ return output
         if (typeof result !== "string" || !result.trim()) {
             throw new Error("O Prometheus retornou código vazio ou inválido.")
         }
-        return addRobloxCompatibilityPrelude(encryptLuaStrings(result))
+        return addRobloxCompatibilityPrelude(result)
     } catch (error) {
         throw new Error(`Prometheus Luau compatibility: ${errorMessage(error)}`)
     }
