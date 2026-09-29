@@ -177,6 +177,72 @@ function getSafePreset(
     return "Medium"
 }
 
+const SAFE_STEPS: Record<string, string[]> = {
+    Weak: [
+        "Vmify",
+        "ConstantArray",
+        "WrapInFunction",
+    ],
+
+    Medium: [
+        "Vmify",
+        "ConstantArray",
+        "WrapInFunction",
+    ],
+
+    Strong: [
+        "Vmify",
+        "ConstantArray",
+        "Vmify",
+        "WrapInFunction",
+    ],
+}
+
+function createSafeConfig(
+    Prometheus: any,
+    presetName: string,
+) {
+    const originalConfig =
+        Prometheus.Presets[presetName]
+
+    if (!originalConfig) {
+        error(
+            "Preset inválido: "
+            .. tostring(presetName)
+        )
+    }
+
+    local config = {}
+
+    for key, value in pairs(originalConfig) do
+        config[key] = value
+    end
+
+    config.LuaVersion = "LuaU"
+
+    local allowedSteps =
+        SAFE_STEPS[presetName]
+
+    local selectedSteps = {}
+
+    for _, wantedName in ipairs(allowedSteps) do
+        for _, step in ipairs(originalConfig.Steps or {}) do
+            if step.Name == wantedName then
+                table.insert(
+                    selectedSteps,
+                    step
+                )
+
+                break
+            end
+        end
+    end
+
+    config.Steps = selectedSteps
+
+    return config
+}
+
 export async function obfuscateLua(
     code: string,
     preset = "Medium",
@@ -193,6 +259,15 @@ export async function obfuscateLua(
 
     const presetName = getSafePreset(preset)
 
+    const safeSteps =
+        SAFE_STEPS[presetName]
+
+    if (!safeSteps) {
+        throw new Error(
+            "Preset inválido.",
+        )
+    }
+
     const script = `
 local Prometheus = require("prometheus")
 
@@ -200,7 +275,8 @@ local source = ${luaLongString(source)}
 
 local presetName = ${JSON.stringify(presetName)}
 
-local originalConfig = Prometheus.Presets[presetName]
+local originalConfig =
+    Prometheus.Presets[presetName]
 
 if not originalConfig then
     error(
@@ -217,9 +293,31 @@ end
 
 config.LuaVersion = "LuaU"
 
-local pipeline = Prometheus.Pipeline:fromConfig(
-    config
-)
+local wantedSteps = ${JSON.stringify(safeSteps)}
+
+local safeSteps = {}
+
+for _, wantedName in ipairs(wantedSteps) do
+    for _, step in ipairs(
+        originalConfig.Steps or {}
+    ) do
+        if step.Name == wantedName then
+            table.insert(
+                safeSteps,
+                step
+            )
+
+            break
+        end
+    end
+end
+
+config.Steps = safeSteps
+
+local pipeline =
+    Prometheus.Pipeline:fromConfig(
+        config
+    )
 
 local output = pipeline:apply(
     source,
