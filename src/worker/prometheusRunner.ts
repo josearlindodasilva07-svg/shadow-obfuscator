@@ -34,10 +34,8 @@ end
         .join("\n")
 
     return `
--- Ambiente compatível com o CLI do Prometheus
 arg = {}
 
--- Compatibilidade com ambientes que não possuem math.log10
 if not math.log10 then
     math.log10 = function(value)
         return math.log(value) / math.log(10)
@@ -62,37 +60,60 @@ async function createEngine(): Promise<LuaEngine> {
     return engine
 }
 
-async function getEngine(): Promise<LuaEngine> {
-    return createEngine()
+function getErrorMessage(error: unknown): string {
+    if (error instanceof Error) {
+        return error.message
+    }
+
+    return String(error)
+}
+
+function formatPrometheusError(error: unknown): Error {
+    const message = getErrorMessage(error)
+
+    if (
+        message.includes("Parsing Error") ||
+        message.includes("Unexpected Token")
+    ) {
+        return new Error(
+            "O Prometheus não conseguiu interpretar alguma parte do código Luau. " +
+            "Isso pode acontecer com determinadas construções de Luau ou código " +
+            "gerado por outro obfuscador.\n\n" +
+            message,
+        )
+    }
+
+    return new Error(message)
 }
 
 export async function obfuscateLua(
     code: string,
     preset = "Medium",
 ): Promise<string> {
-    if (!code.trim()) {
+    const source = code.trim()
+
+    if (!source) {
         throw new Error(
             "Nenhum código Luau foi fornecido.",
         )
     }
 
-    const engine = await getEngine()
+    const engine = await createEngine()
 
     try {
         const script = `
 local Prometheus = require("prometheus")
 
-local source = ${luaLongString(code)}
+local source = ${luaLongString(source)}
 
 local presetName = ${JSON.stringify(preset)}
 
 local config = Prometheus.Presets[presetName]
 
 if not config then
-    config = Prometheus.Presets.Medium
+    error("Preset inválido: " .. tostring(presetName))
 end
 
--- Cria uma cópia limpa da configuração.
 local cleanConfig = {}
 
 for key, value in pairs(config) do
@@ -101,14 +122,10 @@ end
 
 cleanConfig.LuaVersion = "LuaU"
 
--- O Medium original possui algumas transformações
--- que podem quebrar scripts Roblox/LuaU.
--- Mantemos as transformações mais compatíveis
--- e removemos somente as problemáticas.
 if presetName == "Medium" then
     local safeSteps = {}
 
-    for _, step in ipairs(config.Steps or {}) do
+    for _, step in ipairs(cleanConfig.Steps or {}) do
         if step.Name ~= "AntiTamper"
             and step.Name ~= "NumbersToExpressions" then
 
@@ -128,18 +145,29 @@ local output = pipeline:apply(
     "input.lua"
 )
 
+if type(output) ~= "string" then
+    error(
+        "O Prometheus retornou um resultado inválido: "
+        .. type(output)
+    )
+end
+
 return output
 `
 
-        const result = await engine.doString(script)
+        try {
+            const result = await engine.doString(script)
 
-        if (typeof result !== "string") {
-            throw new Error(
-                `O Prometheus retornou um valor inválido: ${typeof result}`,
-            )
+            if (typeof result !== "string") {
+                throw new Error(
+                    `O Prometheus retornou um valor inválido: ${typeof result}`,
+                )
+            }
+
+            return result
+        } catch (error) {
+            throw formatPrometheusError(error)
         }
-
-        return result
     } finally {
         engine.global.close()
     }
