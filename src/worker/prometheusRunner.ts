@@ -122,7 +122,14 @@ function addRobloxCompatibilityPrelude(output: string): string {
     // O compilador do Prometheus mantém referências a APIs Lua 5.1 no
     // resultado do Vmify. Alguns runtimes Roblox não expõem essas funções.
     // Definimos somente fallbacks locais, sem sobrescrever APIs existentes.
-    const prelude = `local __shadow_env = (_ENV or _G)
+    const prelude = `local __shadow_real_getfenv = getfenv
+local __shadow_env = (_ENV or _G)
+if type(__shadow_real_getfenv) == "function" then
+    local __shadow_ok, __shadow_value = pcall(__shadow_real_getfenv)
+    if __shadow_ok and type(__shadow_value) == "table" then
+        __shadow_env = __shadow_value
+    end
+end
 local __shadow_string = string
 local __shadow_table = table
 local __shadow_math = math
@@ -138,6 +145,21 @@ __shadow_env.utf8 = __shadow_env.utf8 or __shadow_utf8
 __shadow_env.os = __shadow_env.os or __shadow_os
 __shadow_env.debug = __shadow_env.debug or __shadow_debug
 __shadow_env._G = __shadow_env
+__shadow_env.assert = __shadow_env.assert or assert
+__shadow_env.error = __shadow_env.error or error
+__shadow_env.getmetatable = __shadow_env.getmetatable or getmetatable
+__shadow_env.setmetatable = __shadow_env.setmetatable or setmetatable
+__shadow_env.pcall = __shadow_env.pcall or pcall
+__shadow_env.xpcall = __shadow_env.xpcall or xpcall
+__shadow_env.type = __shadow_env.type or type
+__shadow_env.tostring = __shadow_env.tostring or tostring
+__shadow_env.tonumber = __shadow_env.tonumber or tonumber
+__shadow_env.select = __shadow_env.select or select
+__shadow_env.next = __shadow_env.next or next
+__shadow_env.pairs = __shadow_env.pairs or pairs
+__shadow_env.ipairs = __shadow_env.ipairs or ipairs
+__shadow_env.rawget = __shadow_env.rawget or rawget
+__shadow_env.rawset = __shadow_env.rawset or rawset
 local getfenv = function() return __shadow_env end
 local setfenv = function(fn) return fn end
 local unpack = (__shadow_table and __shadow_table.unpack) or unpack
