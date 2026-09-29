@@ -1,6 +1,5 @@
 import { readdir, readFile } from "node:fs/promises"
 import path from "node:path"
-import { fileURLToPath } from "node:url"
 
 import type { Plugin } from "vite"
 
@@ -25,19 +24,13 @@ async function findLuaFiles(directory: string): Promise<string[]> {
 
     const files = await Promise.all(
         entries.map(async (entry) => {
-            const absolute = path.join(
-                directory,
-                entry.name,
-            )
+            const absolute = path.join(directory, entry.name)
 
             if (entry.isDirectory()) {
                 return findLuaFiles(absolute)
             }
 
-            if (
-                entry.isFile() &&
-                entry.name.endsWith(".lua")
-            ) {
+            if (entry.isFile() && entry.name.endsWith(".lua")) {
                 return [absolute]
             }
 
@@ -49,12 +42,7 @@ async function findLuaFiles(directory: string): Promise<string[]> {
 }
 
 export function prometheusLuaPlugin(): Plugin {
-    const repoRoot = path.resolve(
-        fileURLToPath(
-            new URL("../../..", import.meta.url),
-        ),
-    )
-
+    const repoRoot = process.cwd()
     const srcRoot = path.join(repoRoot, "src")
 
     return {
@@ -78,21 +66,15 @@ export function prometheusLuaPlugin(): Plugin {
             const luaFiles = await findLuaFiles(srcRoot)
 
             for (const absolute of luaFiles) {
-                const file = path.relative(
-                    srcRoot,
-                    absolute,
-                )
+                const file = path.relative(srcRoot, absolute)
 
                 this.addWatchFile(absolute)
 
-                const moduleName = luaPathToModuleName(
-                    path.join("src", file),
-                )
-
-                modules[moduleName] = await readFile(
-                    absolute,
-                    "utf8",
-                )
+                modules[
+                    luaPathToModuleName(
+                        path.join("src", file),
+                    )
+                ] = await readFile(absolute, "utf8")
             }
 
             return `export default ${JSON.stringify(modules)};`
