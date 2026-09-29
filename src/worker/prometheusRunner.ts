@@ -1,32 +1,20 @@
 import { LuaFactory } from "wasmoon"
 import glueWasmUrl from "wasmoon/dist/glue.wasm?url"
-
 import luaSources from "virtual:prometheus-lua"
 
 type LuaEngine = Awaited<ReturnType<LuaFactory["createEngine"]>>
-
 let enginePromise: Promise<LuaEngine> | null = null
 
-/**
- * Prometheus suporta Luau, mas o próprio projeto informa que esse suporte ainda
- * não está totalmente concluído. Por isso o wrapper mantém LuaVersion = LuaU
- * e evita mutar o preset original entre chamadas.
- */
 function luaLongString(value: string): string {
-    let equalsCount = 0
-
+    let maxEquals = 0
     for (const match of value.matchAll(/\](=*)\]/g)) {
-        equalsCount = Math.max(equalsCount, match[1].length + 1)
+        maxEquals = Math.max(maxEquals, match[1].length + 1)
     }
-
-    const equals = "=".repeat(equalsCount)
+    const equals = "=".repeat(maxEquals)
     return `[${equals}[${value}]${equals}]`
 }
 
 function patchPrometheusSource(name: string, source: string): string {
-    // O parser distribuído em algumas versões do Prometheus não conhece //.
-    // Esta alteração somente adiciona o operador ao parser; ela não altera o
-    // código do usuário nem transforma divisão comum em divisão inteira.
     if (name === "prometheus.enums") {
         return source.replace(
             `"::", "->", "?", "|", "&",`,
@@ -34,16 +22,16 @@ function patchPrometheusSource(name: string, source: string): string {
         )
     }
 
-    if (name === "prometheus.parser") {
-        const oldBlock = `
+    if (name !== "prometheus.parser") return source
+
+    const oldBlock = `
 \t\t\tif(consume(self, TokenKind.Symbol, "%")) then
 \t\t\t\tlocal rhs = self:expressionUnary(scope);
 \t\t\t\tcurr = Ast.ModExpression(curr, rhs, true);
 \t\t\t\tfound = true;
 \t\t\tend
 `
-
-        const newBlock = `
+    const newBlock = `
 \t\t\tif(consume(self, TokenKind.Symbol, "%")) then
 \t\t\t\tlocal rhs = self:expressionUnary(scope);
 \t\t\t\tcurr = Ast.ModExpression(curr, rhs, true);
@@ -60,50 +48,38 @@ function patchPrometheusSource(name: string, source: string): string {
 \t\t\t\tfound = true;
 \t\t\tend
 `
-
-        // Não interromper o carregamento se a versão instalada já tiver //.
-        return source.includes(oldBlock) ? source.replace(oldBlock, newBlock) : source
-    }
-
-    return source
+    return source.includes(oldBlock) ? source.replace(oldBlock, newBlock) : source
 }
 
 function createBootstrap(): string {
-    const modules = Object.entries(luaSources)
-        .map(([name, originalSource]) => {
-            const source = patchPrometheusSource(name, originalSource)
-            return `
-package.preload[${JSON.stringify(name)}] = function(...)
+    const modules = Object.entries(luaSources).map(([name, originalSource]) => {
+        const source = patchPrometheusSource(name, originalSource)
+        return `package.preload[${JSON.stringify(name)}] = function(...)
 ${source}
-end
-`
-        })
-        .join("\n")
+end`
+    }).join("\n")
 
     return `
 arg = {}
-
 if not math.log10 then
     math.log10 = function(value)
         return math.log(value) / math.log(10)
     end
 end
-
 ${modules}
-
 return true
 `
 }
 
-async function createEngine(): Promise<LuaEngine> {
-    const factory = new LuaFactory(glueWasmUrl)
-    const engine = await factory.createEngine()
-    await engine.doString(createBootstrap())
-    return engine
-}
-
 async function getEngine(): Promise<LuaEngine> {
-    if (!enginePromise) enginePromise = createEngine()
+    if (!enginePromise) {
+        enginePromise = (async () => {
+            const factory = new LuaFactory(glueWasmUrl)
+            const engine = await factory.createEngine()
+            await engine.doString(createBootstrap())
+            return engine
+        })()
+    }
     return enginePromise
 }
 
@@ -111,68 +87,76 @@ function getErrorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error)
 }
 
-function createPrometheusError(error: unknown): Error {
-    return new Error(`Prometheus/Luau: ${getErrorMessage(error)}`)
+function safePresetSteps(preset: "Weak" | "Medium" | "Strong"): string {
+    // Roblox-safe: não usa Vmify, AntiTamper, NumbersToExpressions ou
+    // WrapInFunction, pois essas etapas podem alterar o ambiente de execução.
+    if (preset === "Weak") {
+        return `{
+            { Name = "ConstantArray", Settings = {
+                Threshold = 1,
+                StringsOnly = true,
+                Shuffle = false,
+                Rotate = false,
+                LocalWrapperThreshold = 0
+            }}
+        }`
+    }
+
+    return `{
+        { Name = "EncryptStrings", Settings = {} },
+        { Name = "ConstantArray", Settings = {
+            Threshold = 1,
+            StringsOnly = true,
+            Shuffle = ${preset === "Strong" ? "true" : "false"},
+            Rotate = ${preset === "Strong" ? "true" : "false"},
+            LocalWrapperThreshold = 0
+        }}
+    }`
 }
 
-function getSafePreset(presetName: string): "Weak" | "Medium" | "Strong" {
-    if (presetName === "Weak" || presetName === "Medium" || presetName === "Strong") {
-        return presetName
-    }
-    return "Medium"
+function getSafePreset(value: string): "Weak" | "Medium" | "Strong" {
+    return value === "Weak" || value === "Strong" ? value : "Medium"
 }
 
 export async function obfuscateLua(
     code: string,
     preset: "Weak" | "Medium" | "Strong" = "Medium",
 ): Promise<string> {
-    // Não remova espaços do começo/fim do código: eles podem fazer parte de
-    // comentários longos ou de uma entrada que o usuário quer preservar.
     if (!code || !code.trim()) {
         throw new Error("Nenhum código Luau foi fornecido.")
     }
 
     const engine = await getEngine()
-    const presetName = getSafePreset(preset)
+    const selectedPreset = getSafePreset(preset)
     const source = code
+    const steps = safePresetSteps(selectedPreset)
 
     const script = `
 local Prometheus = require("prometheus")
 local source = ${luaLongString(source)}
-local presetName = ${JSON.stringify(presetName)}
-local originalConfig = Prometheus.Presets[presetName]
+local originalConfig = Prometheus.Presets.Minify
 
 if not originalConfig then
-    error("Preset inválido: " .. tostring(presetName))
+    error("Preset Minify não encontrado no Prometheus.")
 end
 
--- Cópia profunda: alguns steps alteram Settings durante o pipeline.
--- Sem isso, uma segunda execução pode herdar estado da primeira.
-local function clone(value, seen)
-    if type(value) ~= "table" then
-        return value
-    end
-    seen = seen or {}
-    if seen[value] then
-        return seen[value]
-    end
-    local result = {}
-    seen[value] = result
-    for key, item in pairs(value) do
-        result[clone(key, seen)] = clone(item, seen)
-    end
-    return result
+local config = {}
+for key, value in pairs(originalConfig) do
+    config[key] = value
 end
 
-local config = clone(originalConfig)
 config.LuaVersion = "LuaU"
 config.PrettyPrint = false
+config.VarNamePrefix = ""
+config.NameGenerator = "MangledShuffled"
+config.Seed = 0
+config.Steps = ${steps}
 
 local pipeline = Prometheus.Pipeline:fromConfig(config)
 local output = pipeline:apply(source, "input.lua")
 
 if type(output) ~= "string" or output == "" then
-    error("O Prometheus retornou um código inválido.")
+    error("O Prometheus não retornou código Luau válido.")
 end
 
 return output
@@ -181,10 +165,10 @@ return output
     try {
         const result = await engine.doString(script)
         if (typeof result !== "string" || !result.trim()) {
-            throw new Error("O Prometheus retornou um código vazio ou inválido.")
+            throw new Error("O Prometheus retornou um resultado vazio.")
         }
         return result
     } catch (error) {
-        throw createPrometheusError(error)
+        throw new Error(`Prometheus Roblox-safe: ${getErrorMessage(error)}`)
     }
 }
