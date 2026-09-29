@@ -7,6 +7,8 @@ type LuaEngine = Awaited<
     ReturnType<LuaFactory["createEngine"]>
 >
 
+let enginePromise: Promise<LuaEngine> | null = null
+
 function luaLongString(value: string): string {
     let maxEquals = 0
 
@@ -36,7 +38,7 @@ end
     return `
 arg = {}
 
--- Compatibilidade com math.log10.
+-- Compatibilidade com funções esperadas pelo Prometheus.
 if not math.log10 then
     math.log10 = function(value)
         return math.log(value) / math.log(10)
@@ -61,6 +63,14 @@ async function createEngine(): Promise<LuaEngine> {
     return engine
 }
 
+async function getEngine(): Promise<LuaEngine> {
+    if (!enginePromise) {
+        enginePromise = createEngine()
+    }
+
+    return enginePromise
+}
+
 function getErrorMessage(error: unknown): string {
     if (error instanceof Error) {
         return error.message
@@ -75,56 +85,18 @@ function createPrometheusError(error: unknown): Error {
     return new Error(message)
 }
 
-function createSafeConfig(
-    config: Record<string, any>,
+function getSafePreset(
     presetName: string,
-): Record<string, any> {
-    const cleanConfig: Record<string, any> = {}
-
-    for (const key of Object.keys(config)) {
-        cleanConfig[key] = config[key]
+): string {
+    if (
+        presetName === "Weak" ||
+        presetName === "Medium" ||
+        presetName === "Strong"
+    ) {
+        return presetName
     }
 
-    cleanConfig.LuaVersion = "LuaU"
-
-    const originalSteps = Array.isArray(config.Steps)
-        ? config.Steps
-        : []
-
-    const safeSteps = []
-
-    for (const step of originalSteps) {
-        if (!step || typeof step.Name !== "string") {
-            continue
-        }
-
-        const name = step.Name
-
-        /*
-         * Essas duas transformações já demonstraram
-         * problemas com scripts Roblox/Luau:
-         *
-         * AntiTamper
-         * NumbersToExpressions
-         *
-         * O Weak não passa por este filtro.
-         */
-        if (
-            (presetName === "Medium" || presetName === "Strong") &&
-            (
-                name === "AntiTamper" ||
-                name === "NumbersToExpressions"
-            )
-        ) {
-            continue
-        }
-
-        safeSteps.push(step)
-    }
-
-    cleanConfig.Steps = safeSteps
-
-    return cleanConfig
+    return "Medium"
 }
 
 export async function obfuscateLua(
@@ -139,49 +111,59 @@ export async function obfuscateLua(
         )
     }
 
-    const engine = await createEngine()
+    const engine = await getEngine()
 
-    try {
-        const script = `
+    const presetName = getSafePreset(preset)
+
+    /*
+     * Não usamos diretamente os presets oficiais.
+     *
+     * O suporte a Luau do Prometheus ainda possui
+     * limitações. Por isso removemos transformações
+     * que podem gerar código incompatível com Roblox.
+     */
+
+    const script = `
 local Prometheus = require("prometheus")
 
 local source = ${luaLongString(source)}
 
-local presetName = ${JSON.stringify(preset)}
+local presetName = ${JSON.stringify(presetName)}
 
-local config = Prometheus.Presets[presetName]
+local originalConfig = Prometheus.Presets[presetName]
 
-if not config then
+if not originalConfig then
     error(
         "Preset inválido: "
         .. tostring(presetName)
     )
 end
 
-local cleanConfig = {}
+local config = {}
 
-for key, value in pairs(config) do
-    cleanConfig[key] = value
+for key, value in pairs(originalConfig) do
+    config[key] = value
 end
 
-cleanConfig.LuaVersion = "LuaU"
+config.LuaVersion = "LuaU"
 
-local originalSteps = config.Steps or {}
+local originalSteps = originalConfig.Steps or {}
+
 local safeSteps = {}
 
 for _, step in ipairs(originalSteps) do
     local name = step.Name
 
-    if not (
-        (
-            presetName == "Medium"
-            or presetName == "Strong"
-        )
-        and (
-            name == "AntiTamper"
-            or name == "NumbersToExpressions"
-        )
-    ) then
+    /*
+     * Essas etapas são deliberadamente ignoradas
+     * porque são as mais problemáticas para manter
+     * compatibilidade com Luau/Roblox.
+     */
+
+    if name ~= "Vmify"
+        and name ~= "AntiTamper"
+        and name ~= "NumbersToExpressions"
+    then
         table.insert(
             safeSteps,
             step
@@ -189,10 +171,10 @@ for _, step in ipairs(originalSteps) do
     end
 end
 
-cleanConfig.Steps = safeSteps
+config.Steps = safeSteps
 
 local pipeline = Prometheus.Pipeline:fromConfig(
-    cleanConfig
+    config
 )
 
 local output = pipeline:apply(
@@ -203,29 +185,38 @@ local output = pipeline:apply(
 if type(output) ~= "string" then
     error(
         "O Prometheus retornou um resultado inválido: "
-        .. type(output)
+        .. tostring(type(output))
+    )
+end
+
+if output == "" then
+    error(
+        "O Prometheus retornou um código vazio."
     )
 end
 
 return output
 `
 
-        try {
-            const result = await engine.doString(
-                script,
+    try {
+        const result = await engine.doString(
+            script,
+        )
+
+        if (typeof result !== "string") {
+            throw new Error(
+                `O Prometheus retornou um valor inválido: ${typeof result}`,
             )
-
-            if (typeof result !== "string") {
-                throw new Error(
-                    `O Prometheus retornou um valor inválido: ${typeof result}`,
-                )
-            }
-
-            return result
-        } catch (error) {
-            throw createPrometheusError(error)
         }
-    } finally {
-        engine.global.close()
+
+        if (!result.trim()) {
+            throw new Error(
+                "O Prometheus retornou um código vazio.",
+            )
+        }
+
+        return result
+    } catch (error) {
+        throw createPrometheusError(error)
     }
 }
