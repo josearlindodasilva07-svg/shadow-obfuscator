@@ -18,6 +18,11 @@ jobs:
       - name: Baixar código
         uses: actions/checkout@v4
 
+      - name: Baixar Prometheus
+        run: |
+          git clone --depth 1 https://github.com/prometheus-lua/Prometheus.git /tmp/prometheus
+          cp -r /tmp/prometheus/src/. src/
+
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
