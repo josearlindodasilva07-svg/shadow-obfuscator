@@ -93,18 +93,14 @@
         select {
             background: #080808;
             color: #ffffff;
-
             border: 1px solid #292929;
             border-radius: 7px;
-
             padding: 9px 12px;
-
             outline: none;
         }
 
         button {
             width: 100%;
-
             border: 1px solid #333333;
             border-radius: 8px;
 
@@ -117,7 +113,6 @@
             font-weight: 700;
 
             cursor: pointer;
-
             transition: 0.15s ease;
         }
 
@@ -127,6 +122,12 @@
 
         button:active {
             transform: scale(0.99);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: wait;
+            transform: none;
         }
 
         #copyButton {
@@ -143,9 +144,7 @@
         #status {
             min-height: 20px;
             margin-top: 12px;
-
             text-align: center;
-
             color: #888888;
             font-size: 13px;
         }
@@ -195,9 +194,9 @@
                 <label for="preset">Preset:</label>
 
                 <select id="preset">
-                    <option value="weak">Weak</option>
-                    <option value="medium" selected>Medium</option>
-                    <option value="strong">Strong</option>
+                    <option value="Weak">Weak</option>
+                    <option value="Medium" selected>Medium</option>
+                    <option value="Strong">Strong</option>
                 </select>
 
             </div>
@@ -228,6 +227,69 @@
         </section>
 
     </main>
+
+    <script type="module">
+        import { obfuscateLua } from "/src/worker/prometheusRunner.ts"
+
+        const inputCode = document.getElementById("inputCode")
+        const outputCode = document.getElementById("outputCode")
+        const preset = document.getElementById("preset")
+        const obfuscateButton = document.getElementById("obfuscateButton")
+        const copyButton = document.getElementById("copyButton")
+        const status = document.getElementById("status")
+
+        obfuscateButton.addEventListener("click", async () => {
+            const code = inputCode.value.trim()
+
+            if (!code) {
+                status.textContent = "Cole um código Luau primeiro."
+                return
+            }
+
+            obfuscateButton.disabled = true
+            status.textContent = "Obfuscando..."
+            outputCode.value = ""
+
+            try {
+                const result = await obfuscateLua(
+                    code,
+                    preset.value,
+                )
+
+                outputCode.value = result
+                status.textContent = "Obfuscação concluída."
+            } catch (error) {
+                console.error(error)
+
+                const message =
+                    error instanceof Error
+                        ? error.message
+                        : String(error)
+
+                status.textContent = `Erro: ${message}`
+            } finally {
+                obfuscateButton.disabled = false
+            }
+        })
+
+        copyButton.addEventListener("click", async () => {
+            const code = outputCode.value
+
+            if (!code) {
+                status.textContent = "Não há código para copiar."
+                return
+            }
+
+            try {
+                await navigator.clipboard.writeText(code)
+                status.textContent = "Código copiado."
+            } catch {
+                outputCode.select()
+                document.execCommand("copy")
+                status.textContent = "Código copiado."
+            }
+        })
+    </script>
 
 </body>
 </html>
