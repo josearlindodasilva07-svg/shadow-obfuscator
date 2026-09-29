@@ -79,19 +79,23 @@ local Prometheus = require("prometheus")
 
 local source = ${luaLongString(code)}
 
-local config
+local presetName = ${JSON.stringify(preset)}
 
-if ${JSON.stringify(preset)} == "Weak" then
-    config = Prometheus.Presets.Weak
-elseif ${JSON.stringify(preset)} == "Strong" then
-    config = Prometheus.Presets.Strong
-else
+local config = Prometheus.Presets[presetName]
+
+if not config then
     config = Prometheus.Presets.Medium
 end
 
-local result = Prometheus:obfuscate(
-    source,
+config.LuaVersion = "LuaU"
+
+local pipeline = Prometheus.Pipeline:fromConfig(
     config
+)
+
+local result = pipeline:apply(
+    source,
+    "input.lua"
 )
 
 return result
@@ -101,7 +105,7 @@ return result
 
     if (typeof result !== "string") {
         throw new Error(
-            "O Prometheus não retornou um código válido.",
+            `O Prometheus retornou um valor inválido: ${typeof result}`,
         )
     }
 
