@@ -1,322 +1,142 @@
-
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
     <title>Shadow Obfuscator</title>
-
     <style>
-        * {
-            box-sizing: border-box;
-        }
-
-        body {
-            margin: 0;
-            min-height: 100vh;
-            background: #0a0a0a;
-            color: #ffffff;
-            font-family: Arial, Helvetica, sans-serif;
-        }
-
-        .container {
-            width: min(900px, 94%);
-            margin: 40px auto;
-        }
-
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-
-        .header h1 {
-            margin: 0;
-            font-size: 28px;
-            font-weight: 700;
-            letter-spacing: 2px;
-        }
-
-        .section {
-            background: #111111;
-            border: 1px solid #242424;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 10px;
-            font-size: 14px;
-            font-weight: 600;
-        }
-
-        textarea {
-            width: 100%;
-            min-height: 280px;
-            resize: vertical;
-            background: #080808;
-            color: #eeeeee;
-            border: 1px solid #292929;
-            border-radius: 8px;
-            padding: 14px;
-            outline: none;
-            font-family: Consolas, Monaco, monospace;
-            font-size: 14px;
-            line-height: 1.5;
-        }
-
-        textarea:focus {
-            border-color: #555555;
-        }
-
-        textarea::placeholder {
-            color: #666666;
-        }
-
-        .settings {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin: 18px 0;
-        }
-
-        .settings label {
-            margin: 0;
-        }
-
-        select {
-            background: #080808;
-            color: #ffffff;
-            border: 1px solid #292929;
-            border-radius: 7px;
-            padding: 9px 12px;
-            outline: none;
-        }
-
-        .buttons {
-            display: flex;
-            gap: 10px;
-        }
-
-        button {
-            width: 100%;
-            border: 1px solid #333333;
-            border-radius: 8px;
-            background: #ffffff;
-            color: #000000;
-            padding: 13px;
-            font-size: 14px;
-            font-weight: 700;
-            cursor: pointer;
-            transition: 0.15s ease;
-        }
-
-        button:hover {
-            background: #dddddd;
-        }
-
-        button:active {
-            transform: scale(0.99);
-        }
-
-        button:disabled {
-            opacity: 0.5;
-            cursor: wait;
-            transform: none;
-        }
-
-        #clearButton {
-            background: #181818;
-            color: #ffffff;
-            border-color: #303030;
-        }
-
-        #clearButton:hover {
-            background: #222222;
-        }
-
-        #copyButton {
-            margin-top: 15px;
-            background: #181818;
-            color: #ffffff;
-            border-color: #303030;
-        }
-
-        #copyButton:hover {
-            background: #222222;
-        }
-
-        #status {
-            min-height: 20px;
-            margin-top: 12px;
-            text-align: center;
-            color: #888888;
-            font-size: 13px;
-        }
-
-        @media (max-width: 600px) {
-            .container {
-                width: 94%;
-                margin: 25px auto;
-            }
-
-            .header h1 {
-                font-size: 23px;
-            }
-
-            .section {
-                padding: 15px;
-            }
-
-            textarea {
-                min-height: 230px;
-                font-size: 13px;
-            }
-
-            .buttons {
-                flex-direction: column;
-            }
-        }
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100vh; background: #0a0a0a; color: #fff; font-family: Arial, Helvetica, sans-serif; }
+        .container { width: min(900px, 94%); margin: 28px auto; }
+        .header { text-align: center; margin-bottom: 24px; }
+        .header h1 { margin: 0; font-size: 28px; letter-spacing: 2px; }
+        .header p { color: #999; margin: 8px 0 0; font-size: 14px; }
+        .section { background: #111; border: 1px solid #292929; border-radius: 12px; padding: 20px; margin-bottom: 18px; }
+        label { display: block; margin-bottom: 9px; font-size: 14px; font-weight: 700; }
+        textarea { width: 100%; min-height: 280px; resize: vertical; background: #080808; color: #eee; border: 1px solid #303030; border-radius: 8px; padding: 14px; outline: none; font-family: Consolas, Monaco, monospace; font-size: 14px; line-height: 1.5; }
+        textarea:focus { border-color: #777; }
+        textarea::placeholder { color: #666; }
+        .file-row { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; }
+        .file-label { flex: 1; display: block; border: 1px dashed #555; border-radius: 8px; padding: 13px; color: #ddd; text-align: center; cursor: pointer; margin: 0; }
+        .file-label:hover { border-color: #aaa; background: #181818; }
+        #fileInput { display: none; }
+        #fileName { color: #999; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .mode { background: #181818; border: 1px solid #303030; border-radius: 8px; padding: 11px 13px; color: #ccc; font-size: 13px; margin-bottom: 16px; }
+        .buttons { display: flex; gap: 10px; margin-top: 14px; }
+        button { width: 100%; border: 1px solid #333; border-radius: 8px; background: #fff; color: #000; padding: 13px; font-size: 14px; font-weight: 700; cursor: pointer; transition: .15s ease; }
+        button:hover { background: #ddd; }
+        button:active { transform: scale(.99); }
+        button:disabled { opacity: .5; cursor: wait; transform: none; }
+        .secondary { background: #181818; color: #fff; border-color: #383838; }
+        .secondary:hover { background: #252525; }
+        #status { min-height: 20px; margin-top: 12px; text-align: center; color: #999; font-size: 13px; }
+        @media (max-width: 600px) { .container { width: 94%; margin: 22px auto; } .header h1 { font-size: 23px; } .section { padding: 15px; } textarea { min-height: 230px; font-size: 13px; } .buttons, .file-row { flex-direction: column; align-items: stretch; } }
     </style>
 </head>
-
 <body>
+<main class="container">
+    <header class="header">
+        <h1>SHADOW OBFUSCATOR</h1>
+        <p>Obfuscação Luau com preset forte e compatibilidade Roblox</p>
+    </header>
 
-    <main class="container">
+    <section class="section">
+        <label for="inputCode">Código Luau</label>
+        <div class="file-row">
+            <label class="file-label" for="fileInput">Enviar arquivo Lua/Luau/TXT</label>
+            <input id="fileInput" type="file" accept=".lua,.luau,.txt,text/plain">
+            <span id="fileName">Nenhum arquivo selecionado</span>
+        </div>
+        <textarea id="inputCode" placeholder="Cole seu código Luau ou carregue um arquivo..." spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+        <div class="mode">Modo automático: <strong>Strong Luau</strong> — o site escolhe a melhor configuração disponível.</div>
+        <div class="buttons">
+            <button id="obfuscateButton" type="button">OBFUSCAR</button>
+            <button id="clearButton" class="secondary" type="button">LIMPAR</button>
+        </div>
+        <div id="status"></div>
+    </section>
 
-        <header class="header">
-            <h1>SHADOW OBFUSCATOR</h1>
-        </header>
+    <section class="section">
+        <label for="outputCode">Código obfuscado</label>
+        <textarea id="outputCode" placeholder="O código obfuscado aparecerá aqui..." spellcheck="false" readonly></textarea>
+        <div class="buttons">
+            <button id="copyButton" class="secondary" type="button">COPIAR</button>
+            <button id="downloadButton" class="secondary" type="button">BAIXAR .LUAU</button>
+        </div>
+    </section>
+</main>
+<script type="module">
+    import { obfuscateLua } from "./src/worker/prometheusRunner.ts"
 
-        <section class="section">
+    const inputCode = document.getElementById("inputCode")
+    const outputCode = document.getElementById("outputCode")
+    const fileInput = document.getElementById("fileInput")
+    const fileName = document.getElementById("fileName")
+    const obfuscateButton = document.getElementById("obfuscateButton")
+    const clearButton = document.getElementById("clearButton")
+    const copyButton = document.getElementById("copyButton")
+    const downloadButton = document.getElementById("downloadButton")
+    const status = document.getElementById("status")
 
-            <label for="inputCode">Código Luau</label>
+    fileInput.addEventListener("change", async () => {
+        const file = fileInput.files?.[0]
+        if (!file) return
+        try {
+            inputCode.value = await file.text()
+            fileName.textContent = file.name
+            status.textContent = "Arquivo carregado."
+        } catch {
+            status.textContent = "Não foi possível ler esse arquivo."
+        }
+    })
 
-            <textarea
-                id="inputCode"
-                placeholder="Cole seu código Luau aqui..."
-                spellcheck="false"
-            ></textarea>
+    obfuscateButton.addEventListener("click", async () => {
+        const code = inputCode.value.trim()
+        if (!code) {
+            status.textContent = "Cole um código ou envie um arquivo primeiro."
+            return
+        }
+        obfuscateButton.disabled = true
+        status.textContent = "Obfuscando com Strong Luau..."
+        outputCode.value = ""
+        try {
+            outputCode.value = await obfuscateLua(code)
+            status.textContent = "Obfuscação concluída. Teste o arquivo no mesmo ambiente Roblox do original."
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            status.textContent = `Erro: ${message}`
+        } finally {
+            obfuscateButton.disabled = false
+        }
+    })
 
-            <div class="settings">
+    clearButton.addEventListener("click", () => {
+        inputCode.value = ""
+        outputCode.value = ""
+        fileInput.value = ""
+        fileName.textContent = "Nenhum arquivo selecionado"
+        status.textContent = ""
+        inputCode.focus()
+    })
 
-                <label for="preset">Preset:</label>
+    copyButton.addEventListener("click", async () => {
+        if (!outputCode.value) { status.textContent = "Não há código para copiar."; return }
+        try { await navigator.clipboard.writeText(outputCode.value) }
+        catch { outputCode.select(); document.execCommand("copy") }
+        status.textContent = "Código copiado."
+    })
 
-                <select id="preset">
-                    <option value="Weak">Weak</option>
-                    <option value="Medium" selected>Medium</option>
-                    <option value="Strong">Strong</option>
-                </select>
-
-            </div>
-
-            <div class="buttons">
-
-                <button id="obfuscateButton">
-                    OBFUSCAR
-                </button>
-
-                <button id="clearButton">
-                    LIMPAR
-                </button>
-
-            </div>
-
-            <div id="status"></div>
-
-        </section>
-
-        <section class="section">
-
-            <label for="outputCode">Código obfuscado</label>
-
-            <textarea
-                id="outputCode"
-                placeholder="O código obfuscado aparecerá aqui..."
-                spellcheck="false"
-                readonly
-            ></textarea>
-
-            <button id="copyButton">
-                COPIAR
-            </button>
-
-        </section>
-
-    </main>
-
-    <script type="module">
-        import { obfuscateLua } from "./src/worker/prometheusRunner.ts"
-
-        const inputCode = document.getElementById("inputCode")
-        const outputCode = document.getElementById("outputCode")
-        const preset = document.getElementById("preset")
-        const obfuscateButton = document.getElementById("obfuscateButton")
-        const clearButton = document.getElementById("clearButton")
-        const copyButton = document.getElementById("copyButton")
-        const status = document.getElementById("status")
-
-        obfuscateButton.addEventListener("click", async () => {
-            const code = inputCode.value.trim()
-
-            if (!code) {
-                status.textContent = "Cole um código Luau primeiro."
-                return
-            }
-
-            obfuscateButton.disabled = true
-            status.textContent = "Obfuscando..."
-            outputCode.value = ""
-
-            try {
-                const result = await obfuscateLua(
-                    code,
-                    preset.value,
-                )
-
-                outputCode.value = result
-                status.textContent = "Obfuscação concluída."
-            } catch (error) {
-                console.error(error)
-
-                const message =
-                    error instanceof Error
-                        ? error.message
-                        : String(error)
-
-                status.textContent = `Erro: ${message}`
-            } finally {
-                obfuscateButton.disabled = false
-            }
-        })
-
-        clearButton.addEventListener("click", () => {
-            inputCode.value = ""
-            outputCode.value = ""
-            status.textContent = ""
-            inputCode.focus()
-        })
-
-        copyButton.addEventListener("click", async () => {
-            const code = outputCode.value
-
-            if (!code) {
-                status.textContent = "Não há código para copiar."
-                return
-            }
-
-            try {
-                await navigator.clipboard.writeText(code)
-                status.textContent = "Código copiado."
-            } catch {
-                outputCode.select()
-                document.execCommand("copy")
-                status.textContent = "Código copiado."
-            }
-        })
-    </script>
-
+    downloadButton.addEventListener("click", () => {
+        if (!outputCode.value) { status.textContent = "Não há código para baixar."; return }
+        const blob = new Blob([outputCode.value], { type: "text/plain;charset=utf-8" })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement("a")
+        link.href = url
+        link.download = "shadow-obfuscated.luau"
+        link.click()
+        URL.revokeObjectURL(url)
+        status.textContent = "Arquivo Luau baixado."
+    })
+</script>
 </body>
 </html>
