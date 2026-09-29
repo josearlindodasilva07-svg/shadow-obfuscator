@@ -118,6 +118,67 @@ function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error)
 }
 
+function decodeLuaLiteral(value: string): string {
+    return value.replace(/\\(\\|"|'|n|r|t|b|f|v|a|x[0-9a-fA-F]{2}|[0-9]{1,3})/g, (_, token: string) => {
+        if (token === "\\") return "\\"
+        if (token === '"') return '"'
+        if (token === "'") return "'"
+        const escapes: Record<string, string> = { n: "\n", r: "\r", t: "\t", b: "\b", f: "\f", v: "\v", a: "\x07" }
+        if (escapes[token]) return escapes[token]
+        if (token.startsWith("x")) return String.fromCharCode(Number.parseInt(token.slice(1), 16))
+        return String.fromCharCode(Number.parseInt(token, 10))
+    })
+}
+
+function encryptLuaStrings(source: string): string {
+    const key = 173
+    const encoded: string[] = []
+    let result = ""
+    let cursor = 0
+    let index = 0
+
+    while (index < source.length) {
+        const character = source[index]
+        if (character === "-" && source[index + 1] === "-") {
+            const end = source.indexOf("\n", index)
+            index = end === -1 ? source.length : end
+            continue
+        }
+        if (character !== '"' && character !== "'") {
+            index += 1
+            continue
+        }
+
+        const quote = character
+        let end = index + 1
+        let escaped = false
+        while (end < source.length) {
+            const current = source[end]
+            if (!escaped && current === quote) break
+            if (!escaped && current === "\\") escaped = true
+            else escaped = false
+            end += 1
+        }
+        if (end >= source.length) {
+            index += 1
+            continue
+        }
+
+        const literal = decodeLuaLiteral(source.slice(index + 1, end))
+        const bytes = Array.from(new TextEncoder().encode(literal), byte => (byte ^ key) + 1)
+        const id = encoded.push(`{${bytes.join(",")}}`) - 1
+        result += source.slice(cursor, index) + `__shadow_decode(${id + 1})`
+        cursor = end + 1
+        index = end + 1
+    }
+
+    if (!encoded.length) return source
+    result += source.slice(cursor)
+    const table = `{${encoded.join(",")}}`
+    const decoder = `local __shadow_data=${table};local __shadow_decode=function(i)local t=__shadow_data[i]local o={}for n=1,#t do o[n]=string.char((t[n]-1)~${key})end return table.concat(o)end;`
+    return decoder + result
+}
+
 function addRobloxCompatibilityPrelude(output: string): string {
     // O compilador do Prometheus mantém referências a APIs Lua 5.1 no
     // resultado do Vmify. Alguns runtimes Roblox não expõem essas funções.
@@ -256,7 +317,7 @@ return output
         if (typeof result !== "string" || !result.trim()) {
             throw new Error("O Prometheus retornou código vazio ou inválido.")
         }
-        return addRobloxCompatibilityPrelude(result)
+        return addRobloxCompatibilityPrelude(encryptLuaStrings(result))
     } catch (error) {
         throw new Error(`Prometheus Luau compatibility: ${errorMessage(error)}`)
     }
