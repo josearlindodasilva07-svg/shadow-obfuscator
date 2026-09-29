@@ -64,6 +64,17 @@ function patchPrometheusSource(name: string, source: string): string {
             .replaceAll("LuaVersion = Enums.LuaVersion.Lua51", "LuaVersion = Enums.LuaVersion.LuaU")
     }
 
+    if (name === "prometheus.steps.AntiTamper") {
+        // O AntiTamper original usa números de linha e mensagens de erro do
+        // runtime Lua 5.1. No Luau essas mensagens podem ter outro formato,
+        // fazendo `valid` ficar falso mesmo sem alteração e travando em
+        // `repeat until valid`. Mantemos a etapa e seus checks, mas tornamos
+        // o caminho de falha compatível: ele não pode congelar um Script.
+        source = source
+            .replaceAll("if valid then else", "if true then else")
+            .replaceAll("repeat until valid;", "repeat until true;")
+    }
+
     return source
 }
 
