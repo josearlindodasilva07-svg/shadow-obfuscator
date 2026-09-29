@@ -217,27 +217,6 @@ end
 
 config.LuaVersion = "LuaU"
 
-local originalSteps = originalConfig.Steps or {}
-
-local safeSteps = {}
-
-for _, step in ipairs(originalSteps) do
-    local name = step.Name
-
-    if name ~= "Vmify"
-        and name ~= "AntiTamper"
-        and name ~= "NumbersToExpressions"
-        and name ~= "EncryptStrings"
-    then
-        table.insert(
-            safeSteps,
-            step
-        )
-    end
-end
-
-config.Steps = safeSteps
-
 local pipeline = Prometheus.Pipeline:fromConfig(
     config
 )
