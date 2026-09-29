@@ -198,6 +198,14 @@ const SAFE_STEPS: Record<string, string[]> = {
     ],
 }
 
+function stepsToLua(
+    steps: string[],
+): string {
+    return `{${steps
+        .map((step) => JSON.stringify(step))
+        .join(", ")}}`
+}
+
 export async function obfuscateLua(
     code: string,
     preset = "Medium",
@@ -218,7 +226,7 @@ export async function obfuscateLua(
         SAFE_STEPS[presetName] ?? SAFE_STEPS.Medium
 
     const wantedStepsLua =
-        JSON.stringify(wantedSteps)
+        stepsToLua(wantedSteps)
 
     const script = `
 local Prometheus = require("prometheus")
