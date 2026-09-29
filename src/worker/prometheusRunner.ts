@@ -220,7 +220,26 @@ end
 local config = clone(originalConfig)
 config.LuaVersion = "LuaU"
 config.PrettyPrint = false
-config.Steps = config.Steps or {}
+    config.Steps = config.Steps or {}
+    -- O Strong original do Prometheus pode transformar strings usadas como
+    -- nomes de propriedades Roblox. Isso gera erros como "oa@1a is not a
+    -- valid member of ScreenGui". Mantemos renomeação/constantes seguras,
+    -- mas removemos apenas etapas conhecidas por quebrar a execução Luau.
+    local blocked = {
+        Vmify = true,
+        EncryptStrings = true,
+        ConstantArray = true,
+        AntiTamper = true,
+        WrapInFunction = true,
+    }
+    local safeSteps = {}
+    for _, step in ipairs(config.Steps) do
+        local name = step.Name or step.name or step[1]
+        if not blocked[name] then
+            table.insert(safeSteps, step)
+        end
+    end
+    config.Steps = safeSteps
 
 local pipeline = Prometheus.Pipeline:fromConfig(config)
 local output = pipeline:apply(source, "input.lua")
