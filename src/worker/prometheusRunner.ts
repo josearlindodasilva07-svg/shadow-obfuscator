@@ -36,6 +36,7 @@ end
     return `
 arg = {}
 
+-- Compatibilidade com math.log10.
 if not math.log10 then
     math.log10 = function(value)
         return math.log(value) / math.log(10)
@@ -68,22 +69,62 @@ function getErrorMessage(error: unknown): string {
     return String(error)
 }
 
-function formatPrometheusError(error: unknown): Error {
+function createPrometheusError(error: unknown): Error {
     const message = getErrorMessage(error)
 
-    if (
-        message.includes("Parsing Error") ||
-        message.includes("Unexpected Token")
-    ) {
-        return new Error(
-            "O Prometheus não conseguiu interpretar alguma parte do código Luau. " +
-            "Isso pode acontecer com determinadas construções de Luau ou código " +
-            "gerado por outro obfuscador.\n\n" +
-            message,
-        )
+    return new Error(message)
+}
+
+function createSafeConfig(
+    config: Record<string, any>,
+    presetName: string,
+): Record<string, any> {
+    const cleanConfig: Record<string, any> = {}
+
+    for (const key of Object.keys(config)) {
+        cleanConfig[key] = config[key]
     }
 
-    return new Error(message)
+    cleanConfig.LuaVersion = "LuaU"
+
+    const originalSteps = Array.isArray(config.Steps)
+        ? config.Steps
+        : []
+
+    const safeSteps = []
+
+    for (const step of originalSteps) {
+        if (!step || typeof step.Name !== "string") {
+            continue
+        }
+
+        const name = step.Name
+
+        /*
+         * Essas duas transformações já demonstraram
+         * problemas com scripts Roblox/Luau:
+         *
+         * AntiTamper
+         * NumbersToExpressions
+         *
+         * O Weak não passa por este filtro.
+         */
+        if (
+            (presetName === "Medium" || presetName === "Strong") &&
+            (
+                name === "AntiTamper" ||
+                name === "NumbersToExpressions"
+            )
+        ) {
+            continue
+        }
+
+        safeSteps.push(step)
+    }
+
+    cleanConfig.Steps = safeSteps
+
+    return cleanConfig
 }
 
 export async function obfuscateLua(
@@ -111,7 +152,10 @@ local presetName = ${JSON.stringify(preset)}
 local config = Prometheus.Presets[presetName]
 
 if not config then
-    error("Preset inválido: " .. tostring(presetName))
+    error(
+        "Preset inválido: "
+        .. tostring(presetName)
+    )
 end
 
 local cleanConfig = {}
@@ -122,19 +166,30 @@ end
 
 cleanConfig.LuaVersion = "LuaU"
 
-if presetName == "Medium" then
-    local safeSteps = {}
+local originalSteps = config.Steps or {}
+local safeSteps = {}
 
-    for _, step in ipairs(cleanConfig.Steps or {}) do
-        if step.Name ~= "AntiTamper"
-            and step.Name ~= "NumbersToExpressions" then
+for _, step in ipairs(originalSteps) do
+    local name = step.Name
 
-            table.insert(safeSteps, step)
-        end
+    if not (
+        (
+            presetName == "Medium"
+            or presetName == "Strong"
+        )
+        and (
+            name == "AntiTamper"
+            or name == "NumbersToExpressions"
+        )
+    ) then
+        table.insert(
+            safeSteps,
+            step
+        )
     end
-
-    cleanConfig.Steps = safeSteps
 end
+
+cleanConfig.Steps = safeSteps
 
 local pipeline = Prometheus.Pipeline:fromConfig(
     cleanConfig
@@ -156,7 +211,9 @@ return output
 `
 
         try {
-            const result = await engine.doString(script)
+            const result = await engine.doString(
+                script,
+            )
 
             if (typeof result !== "string") {
                 throw new Error(
@@ -166,7 +223,7 @@ return output
 
             return result
         } catch (error) {
-            throw formatPrometheusError(error)
+            throw createPrometheusError(error)
         }
     } finally {
         engine.global.close()
