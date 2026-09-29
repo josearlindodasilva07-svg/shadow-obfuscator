@@ -24,9 +24,87 @@ function luaLongString(value: string): string {
     return `[${equals}[${value}]${equals}]`
 }
 
+function patchPrometheusSource(
+    name: string,
+    source: string,
+): string {
+    if (name === "prometheus.enums") {
+        return source.replace(
+            `"::", "->", "?", "|", "&",`,
+            `"::", "->", "?", "|", "&", "//",`,
+        )
+    }
+
+    if (name === "prometheus.parser") {
+        const oldBlock = `
+		if(consume(self, TokenKind.Symbol, "%")) then
+			local rhs = self:expressionUnary(scope);
+			curr = Ast.ModExpression(curr, rhs, true);
+			found = true;
+		end
+`
+
+        const newBlock = `
+		if(consume(self, TokenKind.Symbol, "%")) then
+			local rhs = self:expressionUnary(scope);
+			curr = Ast.ModExpression(curr, rhs, true);
+			found = true;
+		end
+
+		if(consume(self, TokenKind.Symbol, "//")) then
+			local rhs = self:expressionUnary(scope);
+
+			local mathScope, mathId = scope:resolve("math");
+			local mathExpression = Ast.VariableExpression(
+				mathScope,
+				mathId
+			);
+
+			local floorExpression = Ast.IndexExpression(
+				mathExpression,
+				Ast.StringExpression("floor")
+			);
+
+			local divisionExpression = Ast.DivExpression(
+				curr,
+				rhs,
+				true
+			);
+
+			curr = Ast.FunctionCallExpression(
+				floorExpression,
+				{
+					divisionExpression
+				}
+			);
+
+			found = true;
+		end
+`
+
+        if (!source.includes(oldBlock)) {
+            throw new Error(
+                "Não foi possível aplicar a correção do operador // no parser do Prometheus.",
+            )
+        }
+
+        return source.replace(
+            oldBlock,
+            newBlock,
+        )
+    }
+
+    return source
+}
+
 function createBootstrap(): string {
     const modules = Object.entries(luaSources)
-        .map(([name, source]) => {
+        .map(([name, originalSource]) => {
+            const source = patchPrometheusSource(
+                name,
+                originalSource,
+            )
+
             return `
 package.preload[${JSON.stringify(name)}] = function(...)
 ${source}
@@ -71,9 +149,7 @@ async function getEngine(): Promise<LuaEngine> {
     return enginePromise
 }
 
-function getErrorMessage(
-    error: unknown,
-): string {
+function getErrorMessage(error: unknown): string {
     if (error instanceof Error) {
         return error.message
     }
@@ -81,9 +157,7 @@ function getErrorMessage(
     return String(error)
 }
 
-function createPrometheusError(
-    error: unknown,
-): Error {
+function createPrometheusError(error: unknown): Error {
     return new Error(
         getErrorMessage(error),
     )
@@ -93,9 +167,9 @@ function getSafePreset(
     presetName: string,
 ): string {
     if (
-        presetName === "Weak"
-        || presetName === "Medium"
-        || presetName === "Strong"
+        presetName === "Weak" ||
+        presetName === "Medium" ||
+        presetName === "Strong"
     ) {
         return presetName
     }
@@ -117,28 +191,16 @@ export async function obfuscateLua(
 
     const engine = await getEngine()
 
-    const presetName =
-        getSafePreset(preset)
-
-    /*
-     * O código original é enviado diretamente
-     * para o parser do Prometheus.
-     *
-     * Não fazemos substituições de operadores,
-     * strings ou comentários aqui.
-     */
+    const presetName = getSafePreset(preset)
 
     const script = `
 local Prometheus = require("prometheus")
 
 local source = ${luaLongString(source)}
 
-local presetName = ${JSON.stringify(
-    presetName,
-)}
+local presetName = ${JSON.stringify(presetName)}
 
-local originalConfig =
-    Prometheus.Presets[presetName]
+local originalConfig = Prometheus.Presets[presetName]
 
 if not originalConfig then
     error(
@@ -149,29 +211,21 @@ end
 
 local config = {}
 
-for key, value in pairs(
-    originalConfig
-) do
+for key, value in pairs(originalConfig) do
     config[key] = value
 end
 
 config.LuaVersion = "LuaU"
 
-local originalSteps =
-    originalConfig.Steps or {}
+local originalSteps = originalConfig.Steps or {}
 
 local safeSteps = {}
 
-for _, step in ipairs(
-    originalSteps
-) do
+for _, step in ipairs(originalSteps) do
     local name = step.Name
 
-    /*
-     * Não usamos as transformações mais
-     * problemáticas para compatibilidade
-     * com Luau/Roblox.
-     */
+    -- Removemos transformações que podem
+    -- quebrar compatibilidade com Luau/Roblox.
 
     if name ~= "Vmify"
         and name ~= "AntiTamper"
@@ -186,16 +240,14 @@ end
 
 config.Steps = safeSteps
 
-local pipeline =
-    Prometheus.Pipeline:fromConfig(
-        config
-    )
+local pipeline = Prometheus.Pipeline:fromConfig(
+    config
+)
 
-local output =
-    pipeline:apply(
-        source,
-        "input.lua"
-    )
+local output = pipeline:apply(
+    source,
+    "input.lua"
+)
 
 if type(output) ~= "string" then
     error(
@@ -214,10 +266,9 @@ return output
 `
 
     try {
-        const result =
-            await engine.doString(
-                script,
-            )
+        const result = await engine.doString(
+            script,
+        )
 
         if (typeof result !== "string") {
             throw new Error(
