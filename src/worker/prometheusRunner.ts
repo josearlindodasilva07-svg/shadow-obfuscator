@@ -99,7 +99,7 @@ return result
 
     const result = await engine.doStringAsync(script)
 
-    if (typeof result ~= "string") {
+    if (typeof result !== "string") {
         throw new Error(
             "O Prometheus não retornou um código válido.",
         )
