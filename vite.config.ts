@@ -1,3 +1,4 @@
+
 import { defineConfig } from "vite"
 import { prometheusLuaPlugin } from "./src/vite/prometheusLuaPlugin"
 
