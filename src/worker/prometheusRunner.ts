@@ -122,8 +122,10 @@ function addRobloxCompatibilityPrelude(output: string): string {
     // O compilador do Prometheus mantém referências a APIs Lua 5.1 no
     // resultado do Vmify. Alguns runtimes Roblox não expõem essas funções.
     // Definimos somente fallbacks locais, sem sobrescrever APIs existentes.
-    const prelude = `local _ENV = _ENV or _G
-local getfenv = getfenv or function() return _ENV end
+    const prelude = `local __shadow_original_getfenv = getfenv
+local __shadow_env = (__shadow_original_getfenv and __shadow_original_getfenv()) or _G
+local _ENV = __shadow_env
+local getfenv = __shadow_original_getfenv or function() return __shadow_env end
 local setfenv = setfenv or function(fn) return fn end
 local unpack = unpack or table.unpack
 local newproxy = newproxy or function(withMetatable)
@@ -140,7 +142,9 @@ end
     // WrapInFunction do Prometheus gera `return(function(...) ... end)(...)`.
     // Em Script/LocalScript Roblox o wrapper deve ser chamado, não retornado
     // como resultado do chunk. O corpo da função e todas as etapas continuam.
-    const executableChunk = output.replace(/^\s*return\s*\(\s*function\s*\(/, "(function(")
+    const executableChunk = output
+        .replace(/^\s*return\s*\(\s*function\s*\(/, "(function(")
+        .replace(/getfenv\s+and\s+getfenv\(\)\s*or\s+_ENV/g, "__shadow_env")
     return prelude + executableChunk
 }
 
