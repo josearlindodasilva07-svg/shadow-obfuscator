@@ -95,21 +95,30 @@ function safePresetSteps(preset: "Weak" | "Medium" | "Strong"): string {
             { Name = "ConstantArray", Settings = {
                 Threshold = 1,
                 StringsOnly = true,
-                Shuffle = false,
-                Rotate = false,
-                LocalWrapperThreshold = 0
+                Shuffle = true,
+                Rotate = true,
+                LocalWrapperThreshold = 0,
+                Encoding = "mixed"
             }}
         }`
     }
 
     return `{
         { Name = "EncryptStrings", Settings = {} },
+        { Name = "SplitStrings", Settings = {
+            Threshold = 0.85,
+            MinLength = 3,
+            MaxLength = 8,
+            ConcatenationType = "custom",
+            CustomFunctionType = "inline"
+        } },
         { Name = "ConstantArray", Settings = {
             Threshold = 1,
             StringsOnly = true,
-            Shuffle = ${preset === "Strong" ? "true" : "false"},
+            Shuffle = true,
             Rotate = ${preset === "Strong" ? "true" : "false"},
-            LocalWrapperThreshold = 0
+            LocalWrapperThreshold = 0,
+            Encoding = "mixed"
         }}
     }`
 }
