@@ -122,10 +122,25 @@ function addRobloxCompatibilityPrelude(output: string): string {
     // O compilador do Prometheus mantém referências a APIs Lua 5.1 no
     // resultado do Vmify. Alguns runtimes Roblox não expõem essas funções.
     // Definimos somente fallbacks locais, sem sobrescrever APIs existentes.
-    const prelude = `local __shadow_env = _G
+    const prelude = `local __shadow_env = (_ENV or _G)
+local __shadow_string = string
+local __shadow_table = table
+local __shadow_math = math
+local __shadow_coroutine = coroutine
+local __shadow_utf8 = utf8
+local __shadow_os = os
+local __shadow_debug = debug
+__shadow_env.string = __shadow_env.string or __shadow_string
+__shadow_env.table = __shadow_env.table or __shadow_table
+__shadow_env.math = __shadow_env.math or __shadow_math
+__shadow_env.coroutine = __shadow_env.coroutine or __shadow_coroutine
+__shadow_env.utf8 = __shadow_env.utf8 or __shadow_utf8
+__shadow_env.os = __shadow_env.os or __shadow_os
+__shadow_env.debug = __shadow_env.debug or __shadow_debug
+__shadow_env._G = __shadow_env
 local getfenv = function() return __shadow_env end
 local setfenv = function(fn) return fn end
-local unpack = (table and table.unpack) or unpack
+local unpack = (__shadow_table and __shadow_table.unpack) or unpack
 local newproxy = function(withMetatable)
     local value = {}
     if withMetatable then
