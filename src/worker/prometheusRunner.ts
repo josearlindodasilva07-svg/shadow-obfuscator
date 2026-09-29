@@ -47,6 +47,8 @@ async function createEngine(): Promise<LuaEngine> {
 
     const engine = await factory.createEngine()
 
+    engine.global.set("arg", {})
+
     await engine.doString(
         createBootstrap(),
     )
@@ -87,9 +89,11 @@ if not config then
     config = Prometheus.Presets.Medium
 end
 
-config.LuaVersion = "LuaU"
+config.LuaVersion = "Lua51"
 
-local pipeline = Prometheus.Pipeline:fromConfig(config)
+local pipeline = Prometheus.Pipeline:fromConfig(
+    config
+)
 
 local output = pipeline:apply(
     source,
