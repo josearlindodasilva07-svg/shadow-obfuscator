@@ -38,7 +38,7 @@ end
     return `
 arg = {}
 
--- Compatibilidade com funções esperadas pelo Prometheus.
+-- Compatibilidade com math.log10.
 if not math.log10 then
     math.log10 = function(value)
         return math.log(value) / math.log(10)
@@ -80,9 +80,9 @@ function getErrorMessage(error: unknown): string {
 }
 
 function createPrometheusError(error: unknown): Error {
-    const message = getErrorMessage(error)
-
-    return new Error(message)
+    return new Error(
+        getErrorMessage(error),
+    )
 }
 
 function getSafePreset(
@@ -115,14 +115,6 @@ export async function obfuscateLua(
 
     const presetName = getSafePreset(preset)
 
-    /*
-     * Não usamos diretamente os presets oficiais.
-     *
-     * O suporte a Luau do Prometheus ainda possui
-     * limitações. Por isso removemos transformações
-     * que podem gerar código incompatível com Roblox.
-     */
-
     const script = `
 local Prometheus = require("prometheus")
 
@@ -154,11 +146,8 @@ local safeSteps = {}
 for _, step in ipairs(originalSteps) do
     local name = step.Name
 
-    /*
-     * Essas etapas são deliberadamente ignoradas
-     * porque são as mais problemáticas para manter
-     * compatibilidade com Luau/Roblox.
-     */
+    -- Removemos transformações que podem
+    -- quebrar compatibilidade com Luau/Roblox.
 
     if name ~= "Vmify"
         and name ~= "AntiTamper"
