@@ -7,8 +7,6 @@ type LuaEngine = Awaited<
     ReturnType<LuaFactory["createEngine"]>
 >
 
-let enginePromise: Promise<LuaEngine> | null = null
-
 function luaLongString(value: string): string {
     let maxEquals = 0
 
@@ -58,11 +56,7 @@ async function createEngine(): Promise<LuaEngine> {
 }
 
 async function getEngine(): Promise<LuaEngine> {
-    if (!enginePromise) {
-        enginePromise = createEngine()
-    }
-
-    return enginePromise
+    return createEngine()
 }
 
 export async function obfuscateLua(
@@ -75,9 +69,12 @@ export async function obfuscateLua(
         )
     }
 
+    // Cria um novo ambiente do Prometheus para cada obfuscação.
+    // Isso limpa todo o estado da execução anterior.
     const engine = await getEngine()
 
-    const script = `
+    try {
+        const script = `
 local Prometheus = require("prometheus")
 
 local source = ${luaLongString(code)}
@@ -90,10 +87,18 @@ if not config then
     config = Prometheus.Presets.Medium
 end
 
-config.LuaVersion = "LuaU"
+-- Cria uma cópia da configuração para impedir
+-- alterações no preset original durante a execução.
+local cleanConfig = {}
+
+for key, value in pairs(config) do
+    cleanConfig[key] = value
+end
+
+cleanConfig.LuaVersion = "LuaU"
 
 local pipeline = Prometheus.Pipeline:fromConfig(
-    config
+    cleanConfig
 )
 
 local output = pipeline:apply(
@@ -104,13 +109,17 @@ local output = pipeline:apply(
 return output
 `
 
-    const result = await engine.doString(script)
+        const result = await engine.doString(script)
 
-    if (typeof result !== "string") {
-        throw new Error(
-            `O Prometheus retornou um valor inválido: ${typeof result}`,
-        )
+        if (typeof result !== "string") {
+            throw new Error(
+                \`O Prometheus retornou um valor inválido: \${typeof result}\`,
+            )
+        }
+
+        return result
+    } finally {
+        // Limpa o estado do Wasmoon/Prometheus após cada execução.
+        engine.global.close()
     }
-
-    return result
 }
