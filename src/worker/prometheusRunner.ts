@@ -15,6 +15,44 @@ function luaLongString(value: string): string {
 }
 
 function patchPrometheusSource(name: string, source: string): string {
+    const robloxMemberGuard = `
+local function isRobloxMemberString(value)
+    local protected = {
+        GetService=true, LocalPlayer=true, Character=true, CharacterAdded=true,
+        WaitForChild=true, Connect=true, Name=true, ResetOnSpawn=true, Parent=true,
+        Size=true, Position=true, BackgroundColor3=true, Text=true, TextColor3=true,
+        TextSize=true, Font=true, Active=true, CornerRadius=true, InputBegan=true,
+        Changed=true, InputState=true, UserInputType=true, MouseButton1=true,
+        Touch=true, End=true, InputChanged=true, MouseMovement=true,
+        MouseButton1Click=true, JumpRequest=true, Health=true, ChangeState=true,
+        X=true, Y=true, Scale=true, Offset=true,
+    }
+    return protected[value] == true
+end
+`
+
+    if (name === "prometheus.steps.EncryptStrings") {
+        source = source.replace(
+            "function EncryptStrings:apply(ast, _)\n",
+            `function EncryptStrings:apply(ast, _)\n${robloxMemberGuard}`,
+        )
+        source = source.replace(
+            "if(node.kind == AstKind.StringExpression) then",
+            "if(node.kind == AstKind.StringExpression and not isRobloxMemberString(node.value)) then",
+        )
+    }
+
+    if (name === "prometheus.steps.ConstantArray") {
+        source = source.replace(
+            "function ConstantArray:apply(ast, pipeline)\n",
+            `function ConstantArray:apply(ast, pipeline)\n${robloxMemberGuard}`,
+        )
+        source = source.replace(
+            "if math.random() <= self.Threshold then",
+            "if math.random() <= self.Threshold and not (node.kind == AstKind.StringExpression and isRobloxMemberString(node.value)) then",
+        )
+    }
+
     if (name === "prometheus.enums") {
         return source.replace(
             `"::", "->", "?", "|", "&",`,
