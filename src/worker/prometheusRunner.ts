@@ -118,6 +118,28 @@ function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error)
 }
 
+function addRobloxCompatibilityPrelude(output: string): string {
+    // O compilador do Prometheus mantém referências a APIs Lua 5.1 no
+    // resultado do Vmify. Alguns runtimes Roblox não expõem essas funções.
+    // Definimos somente fallbacks locais, sem sobrescrever APIs existentes.
+    const prelude = `local _ENV = _ENV or _G
+local getfenv = getfenv or function() return _ENV end
+local setfenv = setfenv or function(fn) return fn end
+local unpack = unpack or table.unpack
+local newproxy = newproxy or function(withMetatable)
+    local value = {}
+    if withMetatable then
+        return setmetatable(value, {})
+    end
+    return value
+end
+if not math.log10 then
+    math.log10 = function(value) return math.log(value) / math.log(10) end
+end
+`
+    return prelude + output
+}
+
 export async function obfuscateLua(
     code: string,
     preset: "Weak" | "Medium" | "Strong" = "Medium",
@@ -172,7 +194,7 @@ return output
         if (typeof result !== "string" || !result.trim()) {
             throw new Error("O Prometheus retornou código vazio ou inválido.")
         }
-        return result
+        return addRobloxCompatibilityPrelude(result)
     } catch (error) {
         throw new Error(`Prometheus Luau compatibility: ${errorMessage(error)}`)
     }
