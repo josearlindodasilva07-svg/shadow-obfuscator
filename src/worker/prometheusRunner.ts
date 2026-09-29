@@ -37,6 +37,13 @@ end
 -- Ambiente compatível com o CLI do Prometheus
 arg = {}
 
+-- Compatibilidade com ambientes que não possuem math.log10
+if not math.log10 then
+    math.log10 = function(value)
+        return math.log(value) / math.log(10)
+    end
+end
+
 ${modules}
 
 return true
@@ -85,6 +92,7 @@ if not config then
     config = Prometheus.Presets.Medium
 end
 
+-- Cria uma cópia limpa da configuração.
 local cleanConfig = {}
 
 for key, value in pairs(config) do
@@ -92,6 +100,24 @@ for key, value in pairs(config) do
 end
 
 cleanConfig.LuaVersion = "LuaU"
+
+-- O Medium original possui algumas transformações
+-- que podem quebrar scripts Roblox/LuaU.
+-- Mantemos as transformações mais compatíveis
+-- e removemos somente as problemáticas.
+if presetName == "Medium" then
+    local safeSteps = {}
+
+    for _, step in ipairs(config.Steps or {}) do
+        if step.Name ~= "AntiTamper"
+            and step.Name ~= "NumbersToExpressions" then
+
+            table.insert(safeSteps, step)
+        end
+    end
+
+    cleanConfig.Steps = safeSteps
+end
 
 local pipeline = Prometheus.Pipeline:fromConfig(
     cleanConfig
